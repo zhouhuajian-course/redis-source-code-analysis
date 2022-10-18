@@ -1,0 +1,1 @@
+假设目录里面有一个install文件，并且不做这个文件的更新，测试Makefile里面的install目标
