@@ -371,6 +371,8 @@ endif
 
 # redis-server
 $(REDIS_SERVER_NAME): $(REDIS_SERVER_OBJ)
+    # $@ 表示目标名
+    # $^ 表示所有依赖项，多个依赖项以空格隔开
 	$(REDIS_LD) -o $@ $^ ../deps/hiredis/libhiredis.a ../deps/lua/src/liblua.a ../deps/hdr_histogram/libhdrhistogram.a $(FINAL_LIBS)
 
 # redis-sentinel
