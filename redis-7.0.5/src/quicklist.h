@@ -104,8 +104,8 @@ typedef struct quicklistBookmark {
  * 'bookmarks are an optional feature that is used by realloc this struct,
  *      so that they don't consume memory when not used. */
 typedef struct quicklist {
-    quicklistNode *head;
-    quicklistNode *tail;
+    quicklistNode *head;  // 链表头
+    quicklistNode *tail;  // 链表尾
     unsigned long count;        /* total count of all entries in all listpacks */
     unsigned long len;          /* number of quicklistNodes */
     signed int fill : QL_FILL_BITS;       /* fill factor for individual nodes */

@@ -28,7 +28,36 @@ https://www.gnu.org/software/make/manual/make.html#Makefile-Contents
 https://github.com/uglide/RedisDesktopManager  
 https://github.com/qishibo/AnotherRedisDesktopManager
 
-# REDIS 字符串值三种存储方式
+# C语言
+
+- GNU c 手册或参考  
+  https://www.gnu.org/software/gnu-c-manual/gnu-c-manual.html
+- GNU libc (aka glibc) 文档  
+  https://www.gnu.org/software/libc/manual/
+- Linux man-pages 项目  
+  https://www.kernel.org/doc/man-pages/
+- GNU libc 整数  
+  https://www.gnu.org/software/libc/manual/html_node/Integers.html
+  
+
+查看预定义宏 `gcc -dM -E xxx.c`
+
+# CLion
+
+- 选中 函数名 双击Shift 进行全局查找 可以快速找到函数的声明和实现 
+  Ctrl+鼠标左键 或 Ctrl + B 一般会定位到函数的声明 而不是 实现
+
+# Redis 六个命令
+
+- redis-server -> src/server.c
+- redis-cli -> src/redis-cli.c
+- redis-benchmark -> src/redis-benchmark.c
+- redis-sentinel 是 redis-server 的软链接
+- redis-check-rdb 是 redis-server 的软链接
+- redis-check-aof 是 redis-server 的软连接
+
+
+# Redis String 字符串
 
 - 整型字符串 未超过 LONG_MAX 使用 int 直接存在 RedisObject的ptr成员变量位置
 - 普通字符串 不超过44个字节 使用 embstr 直接存在 RedisObject的末尾 总共最大64个字节
@@ -56,16 +85,32 @@ OK
 "raw"
 ```
 
-# C语言
+# Redis List 列表
 
-- GNU c 手册或参考  
-  https://www.gnu.org/software/gnu-c-manual/gnu-c-manual.html
-- GNU libc (aka glibc) 文档  
-  https://www.gnu.org/software/libc/manual/
-- Linux man-pages 项目  
-  https://www.kernel.org/doc/man-pages/
+QuickList = LinkedList + ZipList ???
 
-查看预定义宏 `gcc -dM -E xxx.c`
+```c
+typedef struct quicklist {
+    quicklistNode *head;  // 链表头
+    quicklistNode *tail;  // 链表尾
+    unsigned long count;        /* total count of all entries in all listpacks */
+    unsigned long len;          /* number of quicklistNodes */
+    signed int fill : QL_FILL_BITS;       /* fill factor for individual nodes */
+    unsigned int compress : QL_COMP_BITS; /* depth of end nodes not to compress;0=off */
+    unsigned int bookmark_count: QL_BM_BITS;
+    quicklistBookmark bookmarks[];
+} quicklist;
+
+robj *createQuicklistObject(void) {
+    // 创建快速列表
+    quicklist *l = quicklistCreate();
+    // 创建 redis object
+    robj *o = createObject(OBJ_LIST,l);
+    // 设置 redis object 的编码为 QUICKLIST
+    o->encoding = OBJ_ENCODING_QUICKLIST;
+    return o;
+}
+```
 
 # CMD 编码
 

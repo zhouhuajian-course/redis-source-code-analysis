@@ -110,7 +110,7 @@ void serverLogRaw(int level, const char *msg) {
 
     level &= 0xff; /* clear flags */
     if (level < server.verbosity) return;
-
+    // 追加的方式写日志
     fp = log_to_stdout ? stdout : fopen(server.logfile,"a");
     if (!fp) return;
 
@@ -137,6 +137,7 @@ void serverLogRaw(int level, const char *msg) {
         fprintf(fp,"%d:%c %s %c %s\n",
             (int)getpid(),role_char, buf,c[level],msg);
     }
+    // 把缓冲区的数据写入到磁盘
     fflush(fp);
 
     if (!log_to_stdout) fclose(fp);
@@ -149,8 +150,9 @@ void serverLogRaw(int level, const char *msg) {
 void _serverLog(int level, const char *fmt, ...) {
     va_list ap;
     char msg[LOG_MAX_LEN];
-
+    // 可变参数
     va_start(ap, fmt);
+    // 底层用的还是 vsnprintf
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
 
@@ -2390,7 +2392,7 @@ void makeThreadKillable(void) {
 
 void initServer(void) {
     int j;
-
+    // 信号处理函数
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
     setupSignalHandlers();
@@ -6826,10 +6828,12 @@ int main(int argc, char **argv) {
 #endif
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
+    // 设置Redis内存溢出处理函数 OOM
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
 
     /* To achieve entropy, in case of containers, their time() and getpid() can
      * be the same. But value of tv_usec is fast enough to make the difference */
+    // 随机种子
     gettimeofday(&tv,NULL);
     srand(time(NULL)^getpid()^tv.tv_usec);
     srandom(time(NULL)^getpid()^tv.tv_usec);
@@ -6841,14 +6845,30 @@ int main(int argc, char **argv) {
      * race condition with threads that could be creating files or directories.
      */
     umask(server.umask = umask(0777));
+    /*
+    These typedefs are in stdint.h.
 
+    If you require that an integer be represented in exactly N bits, use one of the following types, with the obvious mapping to bit size and signedness:
+
+    int8_t  8比特位 整数类型
+    int16_t  16比特位 整数类型
+    int32_t
+    int64_t
+    uint8_t 8比特位 无符号整数类型
+    uint16_t
+    uint32_t
+    uint64_t
+     */
+    // 哈希种子
     uint8_t hashseed[16];
     getRandomBytes(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed(hashseed);
-
+    // 执行名 命令名
     char *exec_name = strrchr(argv[0], '/');
     if (exec_name == NULL) exec_name = argv[0];
+    // 检查是否是哨兵模式
     server.sentinel_mode = checkForSentinelMode(argc,argv, exec_name);
+    // 初始化服务配置
     initServerConfig();
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
@@ -6858,6 +6878,8 @@ int main(int argc, char **argv) {
     /* Store the executable path and arguments in a safe place in order
      * to be able to restart the server later. */
     server.executable = getAbsolutePath(argv[0]);
+    // 执行参数值 分配堆内存空间
+    // exec_argv指向参数数据的指针
     server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
     server.exec_argv[argc] = NULL;
     for (j = 0; j < argc; j++) server.exec_argv[j] = zstrdup(argv[j]);
@@ -6865,6 +6887,7 @@ int main(int argc, char **argv) {
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
+    // 哨兵模式
     if (server.sentinel_mode) {
         initSentinelConfig();
         initSentinel();
@@ -6873,6 +6896,7 @@ int main(int argc, char **argv) {
     /* Check if we need to start in redis-check-rdb/aof mode. We just execute
      * the program main. However the program is part of the Redis executable
      * so that we can easily execute an RDB check on loading errors. */
+    // rdb aof 文件检查
     if (strstr(exec_name,"redis-check-rdb") != NULL)
         redis_check_rdb_main(argc,argv,NULL);
     else if (strstr(exec_name,"redis-check-aof") != NULL)
@@ -6968,16 +6992,18 @@ int main(int argc, char **argv) {
             }
             j++;
         }
-
+        // 加载服务配置
         loadServerConfig(server.configfile, config_from_stdin, options);
         if (server.sentinel_mode) loadSentinelConfigFromQueue();
+        // 释放选项的sds结构体内存
         sdsfree(options);
     }
     if (server.sentinel_mode) sentinelCheckConfigFile();
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
+    // 后台运行 变成守护进程
     if (background) daemonize();
-
+    // 服务日志
     serverLog(LL_WARNING, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
     serverLog(LL_WARNING,
         "Redis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
@@ -6992,10 +7018,12 @@ int main(int argc, char **argv) {
     } else {
         serverLog(LL_WARNING, "Configuration loaded");
     }
-
+    // 初始化服务
     initServer();
+    // 创建进程ID文件
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
+    // 输出redis ascii 艺术 Logo
     redisAsciiArt();
     checkTcpBacklogSettings();
 
@@ -7071,7 +7099,7 @@ int main(int argc, char **argv) {
 
     redisSetCpuAffinity(server.server_cpulist);
     setOOMScoreAdj(-1);
-
+    // 事件驱动 IO多路复用
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

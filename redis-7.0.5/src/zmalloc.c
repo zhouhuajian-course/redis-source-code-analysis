@@ -107,6 +107,7 @@ static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
  * '*usable' is set to the usable size if non NULL. */
 void *ztrymalloc_usable(size_t size, size_t *usable) {
     ASSERT_NO_SIZE_OVERFLOW(size);
+    // 底层最终用的还是malloc
     void *ptr = malloc(MALLOC_MIN_SIZE(size)+PREFIX_SIZE);
 
     if (!ptr) return NULL;
@@ -126,6 +127,7 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
 /* Allocate memory or panic */
 void *zmalloc(size_t size) {
     void *ptr = ztrymalloc_usable(size, NULL);
+    // ptr空指针 表示 内存溢出 内存不够
     if (!ptr) zmalloc_oom_handler(size);
     return ptr;
 }
@@ -317,6 +319,7 @@ void zfree(void *ptr) {
     realptr = (char*)ptr-PREFIX_SIZE;
     oldsize = *((size_t*)realptr);
     update_zmalloc_stat_free(oldsize+PREFIX_SIZE);
+    // 底层还是free函数
     free(realptr);
 #endif
 }

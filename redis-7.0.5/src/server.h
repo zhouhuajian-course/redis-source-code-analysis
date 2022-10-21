@@ -2339,7 +2339,7 @@ extern int io_threads_op;
 /*-----------------------------------------------------------------------------
  * Extern declarations
  *----------------------------------------------------------------------------*/
-
+// server是redisServer结构体实例
 extern struct redisServer server;
 extern struct sharedObjectsStruct shared;
 extern dictType objectKeyPointerValueDictType;
@@ -3563,6 +3563,7 @@ void swapMainDbWithTempDb(redisDb *tempDb);
 
 /* Use macro for checking log level to avoid evaluating arguments in cases log
  * should be ignored due to low level. */
+// 日志等级
 #define serverLog(level, ...) do {\
         if (((level)&0xff) < server.verbosity) break;\
         _serverLog(level, __VA_ARGS__);\

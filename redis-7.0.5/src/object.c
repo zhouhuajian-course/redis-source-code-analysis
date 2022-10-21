@@ -228,8 +228,11 @@ robj *dupStringObject(const robj *o) {
 }
 
 robj *createQuicklistObject(void) {
+    // 创建快速列表
     quicklist *l = quicklistCreate();
+    // 创建 redis object
     robj *o = createObject(OBJ_LIST,l);
+    // 设置 redis object 的编码为 QUICKLIST
     o->encoding = OBJ_ENCODING_QUICKLIST;
     return o;
 }
