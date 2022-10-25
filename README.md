@@ -122,3 +122,47 @@ robj *createQuicklistObject(void) {
 > chcp 65001
 Active code page: 65001
 ```
+
+## 五种网络IO模型
+
+five IO Models
+
+- blocking IO 阻塞IO
+- nonblocking IO 非阻塞IO
+- IO multiplexing IO多路复用
+  select poll epoll
+- signal driven IO 信号驱动IO
+- asynchronous IO 异步IO
+
+# VIM 
+
+- 编辑器官方文档
+  https://www.vim.org/docs.php
+- 插入
+  https://vimhelp.org/insert.txt.html#o
+- 移动到特定的行
+  https://vimhelp.org/usr_03.txt.html#usr_03.txt
+- 撤销和重做
+  https://vimdoc.sourceforge.net/htmldoc/undo.html#undo
+- 保存和退出
+  https://vimdoc.sourceforge.net/htmldoc/editing.html#write-quit
+  
+# Redis Command Log
+
+```c
+file: server.c
+
+#include <string.h>
+int processCommand(client *c) {
+    char command[1024];
+    int i;
+    strcat(command, "\n执行命令：");
+    for (i = 0; i < c->argc; i++) {
+        strcat(command, " ");
+        strcat(command, (char *)c->argv[i]->ptr);
+    }
+    strcat(command, "\n");
+    serverLog(LL_NOTICE, command);
+    // ...
+```
+
