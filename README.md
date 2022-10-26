@@ -122,3 +122,60 @@ robj *createQuicklistObject(void) {
 > chcp 65001
 Active code page: 65001
 ```
+
+## Redis 处理命令调用栈
+
+```shell
+(gdb) backtrace
+#0  processCommand (c=c@entry=0x8de6c0) at server.c:3612
+#1  0x000000000045a1ac in processCommandAndResetClient (c=c@entry=0x8de6c0) at networking.c:2444
+#2  0x000000000045cc31 in processInputBuffer (c=c@entry=0x8de6c0) at networking.c:2548
+#3  0x000000000045fe69 in readQueryFromClient (conn=<optimized out>) at networking.c:2684
+#4  0x00000000004f6c33 in callHandler (handler=<optimized out>, conn=0x8de670) at connhelpers.h:79
+#5  connSocketEventHandler (el=<optimized out>, fd=<optimized out>, clientData=0x8de670, mask=<optimized out>) at connection.c:310
+#6  0x000000000043aa45 in aeProcessEvents (eventLoop=eventLoop@entry=0x88d190, flags=flags@entry=27) at ae.c:436
+#7  0x000000000043ad8d in aeMain (eventLoop=0x88d190) at ae.c:496
+#8  0x0000000000437011 in main (argc=1, argv=0x7fffffffe498) at server.c:7075
+```
+
+## Redis 主从复制 
+
+在 server.c processCommand 里面，打印 主节点 Redis 执行的命令
+
+```c
+#include <stdio.h>
+int processCommand(client *c) {
+    int i = 0;
+    printf("命令参数数量 c->argc = %d\n", c->argc);
+    for(i = 0; i < c->argc; i++) {
+        char *str = c->argv[i]->ptr;
+        printf("%s ", str);
+    }
+    printf("\n");
+    // ...
+}
+```
+
+### 从节点启动服务
+
+4869:S 24 Oct 2022 14:44:29.217 * Ready to accept connections
+4869:S 24 Oct 2022 14:44:29.218 * Connecting to MASTER 127.0.0.1:6379
+4869:S 24 Oct 2022 14:44:29.218 * MASTER <-> REPLICA sync started
+4869:S 24 Oct 2022 14:44:29.218 * Non blocking connect for SYNC fired the event.
+
+### 然后，从节点发送给主节点命令
+
+1. PING 命令，检查是否能和Master沟通；
+2. REPLCONF 命令，
+   The REPLCONF command is an internal command. 
+   It is used by a Redis master to configure a connected replica.
+   让Master记录从节点的信息
+3. PSYNC partial sync
+   部分同步/增量同步，
+   如果第一次同步，那么使用全量同步
+   ----
+   SYNC是2.8版本以前的同步命令，每次都是全量同步
+4. REPLCONF 每隔一秒发这个命令
+
+大概每一秒钟会去主节点请求同步数据
+可以从从节点的日志中看出

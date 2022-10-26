@@ -907,6 +907,7 @@ int startBgsaveForReplication(int mincapa, int req) {
 }
 
 /* SYNC and PSYNC command implementation. */
+// SYNC和PSYNC命令的实现
 void syncCommand(client *c) {
     /* ignore SYNC if already slave or in monitor mode */
     if (c->flags & CLIENT_SLAVE) return;

@@ -494,6 +494,7 @@ void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
     // 死循环
     while (!eventLoop->stop) {
+        // 处理事件
         aeProcessEvents(eventLoop, AE_ALL_EVENTS|
                                    AE_CALL_BEFORE_SLEEP|
                                    AE_CALL_AFTER_SLEEP);
