@@ -118,6 +118,7 @@ int authRequired(client *c) {
 }
 
 client *createClient(connection *conn) {
+    // 創建客戶端對象
     client *c = zmalloc(sizeof(client));
 
     /* passing NULL as conn it is possible to create a non connected client.
@@ -2587,7 +2588,9 @@ int processInputBuffer(client *c) {
     return C_OK;
 }
 
+// 读取查询
 void readQueryFromClient(connection *conn) {
+    // 在这里拿到一个 客户端对象 记录客户端的所有信息，包括要执行的命令
     client *c = connGetPrivateData(conn);
     int nread, big_arg = 0;
     size_t qblen, readlen;
