@@ -246,3 +246,56 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 ```
+
+## Redis 网络模型
+
+IO多路复用相关文件
+根据不同操作系统支持的IO多路复用，会使用不同的具体实现
+
+- ae.c
+- ae_epoll.c   Linux上
+- ae_evport.c  Solaris上
+- ae_kqueue.c  macOS上
+- ae_select.c  unix 类unix 大多数系统都有
+
+相关关键代码
+- server.c main 函数
+- initServer 初始化服务
+- server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR)  
+  创建事件循环实例  
+  aeApiCreate(eventLoop)  
+  在epoll.c中本质上是state->epfd = epoll_create(1024)  
+- createSocketAcceptHandler(&server.ipfd, acceptTcpHandler)  
+  创建Socket接受客户端请求的处理器  
+  本质上进行  
+  epoll_ctl(state->epfd,op,fd,&ee)  
+  等客户端请求就会，触发该函数  
+  acceptTcpHandler  
+  本质上调用  
+  fd = accept(s,sa,len);  
+  connSetReadHandler(conn, readQueryFromClient);  
+  把客户端socket加入到epoll，回调函数是readQueryFromClient  
+  客户端有读数据，读取client的输入缓冲，处理成功后，把结果存在client的输出缓冲，写入到队列  
+  beforeSleep会把消费队列，并且添加到epoll中，  
+  如果可写时，进行写操作  
+  比较绕
+- aeSetBeforeSleepProc(server.el,beforeSleep);  
+  aeSetAfterSleepProc(server.el,afterSleep);  
+  epoll_wait调用前，前用后处理的函数  
+  例如将消费响应队列  
+- aeMain(server.el);  
+  死循环处理事件   
+- numevents = aeApiPoll(eventLoop, tvp);  
+  retval = epoll_wait(state->epfd,state->events,eventLoop->setsize,  
+  tvp ? (tvp->tv_sec*1000 + (tvp->tv_usec + 999)/1000) : -1);
+- processCommandAndResetClient(c)  
+  执行命令
+  processCommand(c)
+  查找命令具体处理函数
+  c->cmd = c->lastcmd = c->realcmd = lookupCommand(c->argv,c->argc)
+  例如ping是pingCommand
+  addReply(c,shared.pong);
+  
+  
+  
+  

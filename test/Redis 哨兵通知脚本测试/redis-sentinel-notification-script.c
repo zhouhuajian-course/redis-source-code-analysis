@@ -30,9 +30,10 @@ int main(int argc, char *argv[]) {
     char *eventType = argv[1];
     char *eventDescription = argv[2];
     // a 追加 a+ 追加并可读
-    fd = fopen("redis-sentinel-notification.log", "a");
-    fprintf(fd, "==========\nevent type: %s\n event description: %s\n", eventType, eventDescription);
+    FILE *fd = fopen("redis-sentinel-notification.log", "a");
+    fprintf(fd, "==========\nevent type: %s\nevent description: %s\n", eventType, eventDescription);
     fclose(fd);
+    // 这里还可以发邮件、发短信，可以写云日志等
     return 0;
 };
 
