@@ -44,11 +44,12 @@ typedef struct clusterLink {
 } clusterLink;
 
 /* Cluster node flags and macros. */
-#define CLUSTER_NODE_MASTER 1     /* The node is a master */
-#define CLUSTER_NODE_SLAVE 2      /* The node is a slave */
-#define CLUSTER_NODE_PFAIL 4      /* Failure? Need acknowledge */
-#define CLUSTER_NODE_FAIL 8       /* The node is believed to be malfunctioning */
-#define CLUSTER_NODE_MYSELF 16    /* This node is myself */
+// 集群节点 的 标记 和 宏
+#define CLUSTER_NODE_MASTER 1     /* The node is a master */  // 主节点
+#define CLUSTER_NODE_SLAVE 2      /* The node is a slave */    // 从节点
+#define CLUSTER_NODE_PFAIL 4      /* Failure? Need acknowledge */  // 可能出现故障 possible failure
+#define CLUSTER_NODE_FAIL 8       /* The node is believed to be malfunctioning */  // 已经出现故障
+#define CLUSTER_NODE_MYSELF 16    /* This node is myself */    // 节点自己
 #define CLUSTER_NODE_HANDSHAKE 32 /* We have still to exchange the first ping */
 #define CLUSTER_NODE_NOADDR   64  /* We don't know the address of this node */
 #define CLUSTER_NODE_MEET 128     /* Send a MEET message to this node */
