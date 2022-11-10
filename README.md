@@ -813,7 +813,157 @@ Gossip 协议又称 epidemic 协议（epidemic protocol），是基于流行病�
 + https://redis.io/docs/management/scaling/
 + https://redis.io/docs/reference/cluster-spec/
 
+## Redis集群重定向
+
+本文主要来介绍redis集群的重定向问题。
+
+一、重定向产生的原因
+
+对于Redis的集群来说，因为集群节点不能代理（proxy）命令请求， 所以客户端应该在节点返回 -MOVED 或者 -ASK 转向（redirection）错误时， 自行将命令请求转发至其他节点。
+
+使用时候的常用优化方法： 客户端可以将键和节点之间的映射信息保存起来， 可以有效地减少可能出现的转向次数， 籍此提升命令执行的效率。
+
+当节点需要让一个客户端长期地（permanently）将针对某个槽的命令请求发送至另一个节点时， 节点向客户端返回 MOVED 转向。这个情况一般是，客户端请求了不存在与当前节点上的操作的时候，我们通常可以通过在客户端维护一个节点和键值的映射关系来解决。
+
+另一方面， 当节点需要让客户端仅仅在下一个命令请求中转向至另一个节点时， 节点向客户端返回 ASK 转向。这里重定向一般是redis集群不同节点间正在迁移数据的时候，才会使用这个ASK转向，例如redis集群的扩容或者缩容的时候。
+
+二、MOVED转向
+
+一个 Redis 客户端可以向集群中的任意节点（包括从节点）发送命令请求。如果所查找的槽不是由该节点处理的话， 节点将查看自身内部所保存的哈希槽到节点 ID 的映射记录， 并向客户端回复一个 MOVED 错误。
+
+执行过程：
+
+1.Redis的单个节点通过socket通讯，
+会共享Redis Cluster中槽和集群中对应节点的关系。
+2.客户端向Redis Cluster的任意节点发送命令，
+接收命令的节点会根据CRC16规则进行hash运算与16383取余，
+计算自己的槽和对应节点 。
+3.如果保存数据的槽被分配给当前节点，则去槽中执行命令，
+并把命令执行结果返回给客户端。
+4.如果保存数据的槽不在当前节点的管理范围内，
+则向客户端返回moved重定向异常 。
+5.客户端接收到节点返回的结果，如果是moved异常，
+则从moved异常中获取目标节点的信息。
+6.客户端向目标节点发送命令，获取命令执行结果。
+三、ASK转向
+
+当节点需要让客户端仅仅在下一个命令请求中转向至另一个节点时， 节点向客户端返回 ASK 转向，往往发生在数据从节点A迁移到节点B的时候。
+
+执行过程：
+
+1.当客户端向集群中某个节点发送命令，
+节点向客户端返回moved异常，告诉客户端数据对应目标槽的节点信息。
+2.客户端再向目标节点发送命令，
+目标节点中的槽已经迁移出别的节点上了，此时目标节点会返回ask重定向给客户端。
+3.客户端向新的target节点发送Asking命令，
+然后再次向新节点发送请求请求命令。
+4.新节点target执行命令，把命令执行结果返回给客户端。
+例子：
+
+在我们上一节列举的槽 8 的例子中， 因为槽 8 所包含的各个键分散在节点 A 和节点 B 中， 所以当客户端在节点 A 中没找到某个键时， 它应该转向到节点 B 中去寻找， 但是这种转向应该仅仅影响一次命令查询， 而不是让客户端每次都直接去查找节点 B ： 在节点 A 所持有的属于槽 8 的键没有全部被迁移到节点 B 之前， 客户端应该先访问节点 A ， 然后再访问节点 B 。
+
+*本部分内容来自网络*
+
+Since cluster nodes are not able to proxy requests, clients may be redirected to other nodes using redirection errors -MOVED and -ASK. The client is in theory free to send requests to all the nodes in the cluster, getting redirected if needed, so the client is not required to hold the state of the cluster. However clients that are able to cache the map between keys and nodes can improve the performance in a sensible way.
+
+客户端可自由发送请求到任意节点，如果节点处理不了，会返回-MOVED或-ASK，让客户端重定向到目标节点，
+客户端可以进行键和节点的缓存以提升性能。
+
+## Redis Cluster Bus
+
+port 6379 负责客户端连接、数据操作
+cluster-port 16379 复制集群节点沟通
+
+使用Gossip协议和配置文件进行节点沟通
+
+The cluster bus
+Every Redis Cluster node has an additional TCP port for receiving incoming connections from other Redis Cluster nodes. This port will be derived by adding 10000 to the data port or it can be specified with the cluster-port config.
+
+Example 1:
+
+If a Redis node is listening for client connections on port 6379, and you do not add cluster-port parameter in redis.conf, the Cluster bus port 16379 will be opened.
+
+Example 2:
+
+If a Redis node is listening for client connections on port 6379, and you set cluster-port 20000 in redis.conf, the Cluster bus port 20000 will be opened.
+
+Node-to-node communication happens exclusively using the Cluster bus and the Cluster bus protocol: a binary protocol composed of frames of different types and sizes. The Cluster bus binary protocol is not publicly documented since it is not intended for external software devices to talk with Redis Cluster nodes using this protocol. However you can obtain more details about the Cluster bus protocol by reading the cluster.h and cluster.c files in the Redis Cluster source code.
 
 
+Cluster topology
+Redis Cluster is a full mesh where every node is connected with every other node using a TCP connection.
 
+In a cluster of N nodes, every node has N-1 outgoing TCP connections, and N-1 incoming connections.
 
+These TCP connections are kept alive all the time and are not created on demand. When a node expects a pong reply in response to a ping in the cluster bus, before waiting long enough to mark the node as unreachable, it will try to refresh the connection with the node by reconnecting from scratch.
+
+While Redis Cluster nodes form a full mesh, nodes use a gossip protocol and a configuration update mechanism in order to avoid exchanging too many messages between nodes during normal conditions, so the number of messages exchanged is not exponential.
+
+## Hash Slots 
+
+The client is not required to, but should try to memorize that hash slot 3999 is served by 127.0.0.1:6381. This way once a new command needs to be issued it can compute the hash slot of the target key and have a greater chance of choosing the right node.
+
+An alternative is to just refresh the whole client-side cluster layout using the CLUSTER SHARDS, or the deprecated CLUSTER SLOTS, command when a MOVED redirection is received. When a redirection is encountered, it is likely multiple slots were reconfigured rather than just one, so updating the client configuration as soon as possible is often the best strategy.
+
+客户端可以缓存一个键对应的节点，
+或者缓存所有哈希槽，一旦出现MOVED结果，使用更新CLUSTER SHARDS，全部哈希槽
+
+## 故障检测 Failure detection
+
++ PFAIL possible failure 
++ FAIL  failure
+
+## 副本节点提升为主节点
+
+当主节点被标记为FAIL，副本节点自己向集群中正在运行的主节点，
+发出提升为主节点的投票， 如果集群中正在运行的主机点超过半数同意，
+那么这个副本会提升为主节点。
+
+多个副本节点争取成为主节点，要求其他主节点投票，争取获胜成为主节点。
+
+手动提升，是在一个副本节点中执行
+CLUSTER FAILOVER 命令
+
+## Replica election and promotion
+
+Replica election and promotion is handled by replica nodes, with the help of master nodes that vote for the replica to promote. A replica election happens when a master is in FAIL state from the point of view of at least one of its replicas that has the prerequisites in order to become a master.
+
+In order for a replica to promote itself to master, it needs to start an election and win it. All the replicas for a given master can start an election if the master is in FAIL state, however only one replica will win the election and promote itself to master.
+
+A replica starts an election when the following conditions are met:
+
+The replica's master is in FAIL state.
+The master was serving a non-zero number of slots.
+The replica replication link was disconnected from the master for no longer than a given amount of time, in order to ensure the promoted replica's data is reasonably fresh. This time is user configurable.
+
+## 主节点下线后的日志
+
+```
+# 其副本节点
+1368:S 10 Nov 2022 18:20:08.396 * MASTER <-> REPLICA sync started
+1368:S 10 Nov 2022 18:20:08.397 # Error condition on socket for SYNC: Connection refused
+1368:S 10 Nov 2022 18:20:09.437 * FAIL message received from e9a0582dcbcd00401888eb7aa9ab0aed9faa7e62 about b8a7cbb35ab31aaefd54477190bee5a14e1cb0a2
+1368:S 10 Nov 2022 18:20:09.437 * Connecting to MASTER 192.168.1.201:6379
+1368:S 10 Nov 2022 18:20:09.438 * MASTER <-> REPLICA sync started
+1368:S 10 Nov 2022 18:20:09.438 # Start of election delayed for 526 milliseconds (rank #0, offset 30716).
+1368:S 10 Nov 2022 18:20:09.438 # Cluster state changed: fail
+1368:S 10 Nov 2022 18:20:09.439 # Error condition on socket for SYNC: Connection refused
+1368:S 10 Nov 2022 18:20:09.967 # Starting a failover election for epoch 7.
+1368:S 10 Nov 2022 18:20:09.972 # Failover election won: I'm the new master.
+1368:S 10 Nov 2022 18:20:09.972 # configEpoch set to 7 after successful failover
+1368:M 10 Nov 2022 18:20:09.972 * Discarding previously cached master state.
+1368:M 10 Nov 2022 18:20:09.972 # Setting secondary replication ID to 6b26e92f14772317595a5574b2a87760edf352f1, valid up to offset: 30717. New replication ID is e0b3bbf2e238d7a826038b3eae8a2c0ba47113b9
+1368:M 10 Nov 2022 18:20:09.973 # Cluster state changed: ok
+
+其他节点可能是
+1337:M 10 Nov 2022 18:20:09.435 * Marking node b8a7cbb35ab31aaefd54477190bee5a14e1cb0a2 as failing (quorum reached).
+1337:M 10 Nov 2022 18:20:09.435 # Cluster state changed: fail
+1337:M 10 Nov 2022 18:20:09.969 # Failover auth granted to 110a6d32d07d8116b1d37c73f696a55072b5f4e9 for epoch 7
+1337:M 10 Nov 2022 18:20:09.975 # Cluster state changed: ok
+或者是
+1336:M 10 Nov 2022 18:20:09.435 * FAIL message received from e9a0582dcbcd00401888eb7aa9ab0aed9faa7e62 about b8a7cbb35ab31aaefd54477190bee5a14e1cb0a2
+1336:M 10 Nov 2022 18:20:09.435 # Cluster state changed: fail
+1336:M 10 Nov 2022 18:20:09.969 # Failover auth granted to 110a6d32d07d8116b1d37c73f696a55072b5f4e9 for epoch 7
+1336:M 10 Nov 2022 18:20:09.975 # Cluster state changed: ok
+
+```
